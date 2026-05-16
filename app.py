@@ -2,38 +2,8 @@ from flask import Flask, request, jsonify
 import os
 import numpy as np
 import joblib
-import librosa
 
 app = Flask(__name__)
-
-# -----------------------------
-# Load model files
-# -----------------------------
-MODEL_PATH = "models/gradient_boosting_model.pkl"
-SCALER_PATH = "models/scaler.pkl"
-SELECTOR_PATH = "models/selector.pkl"
-LABEL_ENCODER_PATH = "models/label_encoder.pkl"
-
-model = joblib.load(MODEL_PATH)
-scaler = joblib.load(SCALER_PATH)
-selector = joblib.load(SELECTOR_PATH)
-label_encoder = joblib.load(LABEL_ENCODER_PATH)
-
-# -----------------------------
-# Feature Extraction
-# -----------------------------
-def extract_features(audio_path):
-
-    y, sr = librosa.load(audio_path, sr=22050)
-
-    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20)
-
-    features = np.concatenate([
-        np.mean(mfcc, axis=1),
-        np.var(mfcc, axis=1)
-    ])
-
-    return features.reshape(1, -1)
 
 # -----------------------------
 # Home Route
@@ -41,8 +11,65 @@ def extract_features(audio_path):
 @app.route("/")
 def home():
     return """
-    <h1>🎵 Audio Classification API</h1>
-    <p>Upload audio file using POST /predict</p>
+    <html>
+        <head>
+            <title>Audio Classification</title>
+            <style>
+                body{
+                    font-family: Arial;
+                    background:#0d1117;
+                    color:white;
+                    text-align:center;
+                    padding-top:50px;
+                }
+
+                .box{
+                    width:400px;
+                    margin:auto;
+                    background:#161b22;
+                    padding:30px;
+                    border-radius:10px;
+                }
+
+                input{
+                    margin-top:20px;
+                }
+
+                button{
+                    margin-top:20px;
+                    padding:10px 20px;
+                    border:none;
+                    border-radius:5px;
+                    background:#238636;
+                    color:white;
+                    cursor:pointer;
+                }
+            </style>
+        </head>
+
+        <body>
+
+            <div class="box">
+                <h1>🎵 Audio Classification System</h1>
+
+                <p>Upload an audio file</p>
+
+                <form action="/predict" method="post" enctype="multipart/form-data">
+
+                    <input type="file" name="audio" required>
+
+                    <br>
+
+                    <button type="submit">
+                        Predict
+                    </button>
+
+                </form>
+
+            </div>
+
+        </body>
+    </html>
     """
 
 # -----------------------------
@@ -51,42 +78,74 @@ def home():
 @app.route("/predict", methods=["POST"])
 def predict():
 
-    if "audio" not in request.files:
-        return jsonify({"error": "No audio file uploaded"})
-
-    file = request.files["audio"]
-
-    if file.filename == "":
-        return jsonify({"error": "No selected file"})
-
-    temp_path = f"/tmp/{file.filename}"
-    file.save(temp_path)
-
     try:
-        features = extract_features(temp_path)
 
-        scaled = scaler.transform(features)
+        # Check file
+        if "audio" not in request.files:
+            return "No audio file uploaded"
 
-        selected = selector.transform(scaled)
+        file = request.files["audio"]
 
-        prediction = model.predict(selected)
+        if file.filename == "":
+            return "No selected file"
 
-        predicted_label = label_encoder.inverse_transform(prediction)[0]
+        # Create temp folder
+        temp_path = f"/tmp/{file.filename}"
 
-        probabilities = model.predict_proba(selected)[0]
+        # Save uploaded file
+        file.save(temp_path)
 
-        confidence = float(np.max(probabilities))
+        # --------------------------------------------------
+        # SIMPLE DUMMY PREDICTION
+        # --------------------------------------------------
+        # Replace later with your ML prediction code
+        # --------------------------------------------------
 
-        return jsonify({
-            "prediction": predicted_label,
-            "confidence": round(confidence, 4)
-        })
+        prediction = "Speech"
+
+        confidence = 0.95
+
+        return f"""
+        <html>
+            <body style="font-family:Arial;background:#0d1117;color:white;text-align:center;padding-top:50px;">
+
+                <h1>Prediction Result</h1>
+
+                <h2>{prediction}</h2>
+
+                <h3>Confidence: {confidence}</h3>
+
+                <br>
+
+                <a href="/" style="color:#58a6ff;">
+                    Upload Another File
+                </a>
+
+            </body>
+        </html>
+        """
 
     except Exception as e:
-        return jsonify({"error": str(e)})
+
+        return f"""
+        <html>
+            <body style="font-family:Arial;background:#0d1117;color:white;text-align:center;padding-top:50px;">
+
+                <h1>Error</h1>
+
+                <p>{str(e)}</p>
+
+            </body>
+        </html>
+        """
 
 # -----------------------------
-# Run
+# Vercel Entry
+# -----------------------------
+app = app
+
+# -----------------------------
+# Run Local
 # -----------------------------
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
